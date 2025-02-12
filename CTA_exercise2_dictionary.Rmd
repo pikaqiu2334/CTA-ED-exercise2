@@ -168,7 +168,7 @@ tidy_tweets %>%
 
 ```
 
-We have a total of 1,174 words with some fear valence in our tweet data according to the `nrc` classification. Several seem reasonable (e.g., "death," "pandemic"); others seems less so (e.g., "mum," "fight").
+We have a total of 1,173 words with some fear valence in our tweet data according to the `nrc` classification. Several seem reasonable (e.g., "death," "pandemic"); others seems less so (e.g., "mum," "fight").
 
 ## Sentiment trends over time
 
@@ -529,4 +529,74 @@ tidy_tweets %>%
 
 3. Apply the Lexicoder Sentiment Dictionary to the news tweets, but break down the analysis by newspaper
 4. Don't forget to 'knit' to produce your final html output for the exercise.
+
+```{r}
+# 只选择 Lexicoder Sentiment Dictionary 的正面和负面词汇
+data_dictionary_LSD2015_pos_neg <- data_dictionary_LSD2015[1:2]
+
+```
+
+```{r}
+# 将文本转换为 corpus 并提取 'tweet' 作为文本字段
+tweet_corpus <- corpus(tweets, text_field = "tweet", docvars = "username")
+
+# 进行分词，并移除标点符号
+toks_news <- tokens(tweet_corpus, remove_punct = TRUE)
+
+# 应用 Lexicoder 词典查找情感词
+toks_news_lsd <- tokens_lookup(toks_news, dictionary = data_dictionary_LSD2015_pos_neg)
+
+```
+
+```{r}
+# 生成 DFM 并按报纸 (username) 分组
+dfm_news_lsd <- dfm(toks_news_lsd) %>%
+  dfm_group(groups = username) 
+
+```
+
+```{r}
+# 转换为数据框，重命名 'doc_id' 为 'newspaper'
+tidy_dfm_news_lsd <- dfm_news_lsd %>%
+  convert(to = "data.frame") %>%
+  rename("newspaper" = doc_id) %>%
+  mutate(sentiment = positive - negative)  # 计算总情感分数
+
+```
+
+```{r}
+tidy_dfm_news_lsd %>%
+  ggplot() +
+  geom_point(aes(x=reorder(newspaper, -sentiment), y=sentiment)) +  # 负面到正面排序
+  coord_flip() +  # 旋转图像
+  xlab("Newspapers") +
+  ylab("Overall tweet sentiment (negative to positive)") +
+  theme_minimal()
+
+```
+
+```{r}
+dfm_news_lsd <- dfm(toks_news_lsd) %>%
+  dfm_group(groups = interaction(username, date))  # 按报纸和日期分组
+```
+
+```{r}
+# 转换为数据框并提取 'newspaper' 和 'date'
+tidy_dfm_news_lsd <- dfm_news_lsd %>%
+  convert(to = "data.frame") %>%
+  extract(doc_id, into = c("newspaper", "date"), regex = "([a-zA-Z]+)\\.(.+)") %>%
+  mutate(date = as.Date(date)) %>%
+  mutate(sentiment = positive - negative)
+
+# 绘制时间序列情感变化
+tidy_dfm_news_lsd %>%
+  ggplot(aes(x=date, y=sentiment)) +
+  geom_point(alpha=0.5) +
+  geom_smooth(method= loess, alpha=0.25) +
+  facet_wrap(~newspaper) +  # 按报纸分面板
+  xlab("Date") + ylab("Overall sentiment (negative to positive)") +
+  ggtitle("Tweet sentiment trend across British newspapers") +
+  theme_minimal()
+
+```
 
